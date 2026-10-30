@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Clock, FileQuestion, Flag, MinusCircle, Pencil, Play, RotateCcw, Timer } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, CheckCircle2, Clock, FileDown, FileQuestion, Flag, MinusCircle, Pencil, Play, RotateCcw, Timer } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import { PdfExportDialog } from "../components/tests/PdfExportDialog";
 import { Button, ButtonLink } from "../components/ui/Button";
 import { Alert, Badge, Card, ErrorState, PageHeader, Spinner, difficultyTone } from "../components/ui/primitives";
 import { api, ApiError } from "../lib/api";
@@ -13,6 +14,7 @@ export function TestDetailPage() {
   const id = Number(testId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   const test = useQuery({ queryKey: ["test", id], queryFn: () => api.getTest(id), enabled: Number.isFinite(id) });
   const attempts = useQuery({
@@ -50,9 +52,14 @@ export function TestDetailPage() {
         title={t.title}
         description={[t.subject, t.topic, t.category].filter(Boolean).join(" · ") || undefined}
         actions={
-          <ButtonLink to={`/tests/${t.id}/edit`} variant="outline" icon={<Pencil className="size-4" />}>
-            Edit
-          </ButtonLink>
+          <>
+            <Button variant="outline" onClick={() => setPdfOpen(true)} disabled={t.question_count === 0} icon={<FileDown className="size-4" />}>
+              Download PDF
+            </Button>
+            <ButtonLink to={`/tests/${t.id}/edit`} variant="outline" icon={<Pencil className="size-4" />}>
+              Edit
+            </ButtonLink>
+          </>
         }
       />
 
@@ -144,6 +151,7 @@ export function TestDetailPage() {
           </Card>
         )}
       </section>
+      <PdfExportDialog testId={t.id} open={pdfOpen} onClose={() => setPdfOpen(false)} />
     </div>
   );
 }

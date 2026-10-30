@@ -9,6 +9,7 @@ import type {
   GenerateTestInput,
   GenerateTestResponse,
   HealthStatus,
+  PdfExportOptions,
   SubmitReason,
   TestDetail,
   TestStatus,
@@ -51,7 +52,7 @@ function formatDetail(detail: unknown): string | null {
   return null;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function send(path: string, init: RequestInit): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
@@ -66,27 +67,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError("Can't reach the server. Check your connection and that the backend is running.", 0, "network");
   }
-
-  if (response.status === 204) return undefined as T;
-
-  let body: unknown = null;
-  const text = await response.text();
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = null;
-    }
-  }
-
   if (!response.ok) {
-    const data = (body ?? {}) as { detail?: unknown; code?: string };
+    let data: { detail?: unknown; code?: string } = {};
+    try {
+      data = (await response.json()) ?? {};
+    } catch {
+      // non-JSON error body
+    }
     const message =
       formatDetail(data.detail) ??
       (response.status >= 500 ? "The server ran into a problem. Please try again." : `Request failed (${response.status}).`);
     throw new ApiError(message, response.status, data.code ?? (response.status === 422 ? "invalid_input" : "error"));
   }
-  return body as T;
+  return response;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await send(path, init);
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError("The server sent an unexpected response.", response.status, "bad_response");
+  }
+}
+
+function filenameFrom(response: Response, fallback: string) {
+  const header = response.headers.get("Content-Disposition") ?? "";
+  return /filename="?([^";]+)"?/.exec(header)?.[1] ?? fallback;
 }
 
 const json = (method: string, payload?: unknown): RequestInit => ({
@@ -121,6 +131,16 @@ export const api = {
     }
     if (input.file) form.append("file", input.file);
     return request<GenerateTestResponse>("/api/tests/generate", { method: "POST", body: form, signal });
+  },
+
+  pdfDefaults: (id: number) => request<PdfExportOptions>(`/api/tests/${id}/pdf/defaults`),
+  downloadPdf: async (id: number, options: PdfExportOptions) => {
+    const response = await send(`/api/tests/${id}/pdf`, {
+      method: "POST",
+      body: JSON.stringify(options),
+      headers: { Accept: "application/pdf", "Content-Type": "application/json" },
+    });
+    return { blob: await response.blob(), filename: filenameFrom(response, `test-${id}.pdf`) };
   },
 
   startAttempt: (testId: number) => request<AttemptSession>(`/api/tests/${testId}/attempts`, { method: "POST" }),

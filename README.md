@@ -18,6 +18,7 @@ McqGen started as a small LangChain + Streamlit script that turned a document in
 - AI tests are saved as **drafts** you review and edit before publishing.
 - **Manual editor**: write questions from scratch with 2–6 options, explanations and topics. Reorder, duplicate and delete questions. Validation runs inline, and you're warned before leaving with unsaved changes.
 - Search, filter, duplicate and delete tests.
+- **Printable PDF export**: a question paper with your own heading (institution, title, subtitle, exam date), exam details, editable instructions and Name / Roll No. / Signature lines. Optional extras: a bubble **answer sheet**, an **answer key** with explanations, and shuffled **paper versions** (Set A / Set B) whose answer keys always match.
 
 **Exam experience**
 - Dedicated full-screen exam view, one question at a time, with previous/next navigation and keyboard shortcuts (`1–4`, `←/→`, `M`).
@@ -81,7 +82,7 @@ flowchart LR
 | Backend | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2, pydantic-settings |
 | AI | LangChain (`langchain-openai`) with JSON-schema structured output, OpenAI chat models |
 | Storage | SQLite by default (any SQLAlchemy database such as PostgreSQL via `DATABASE_URL`) |
-| Documents | `pypdf` for PDF text extraction |
+| Documents | `pypdf` for PDF text extraction, `fpdf2` with bundled DejaVu fonts for PDF export |
 | Testing | pytest, Vitest + Testing Library, Playwright (end-to-end, desktop and mobile) |
 | Quality | Ruff (lint + format), ESLint, TypeScript strict mode, GitHub Actions CI |
 
@@ -206,6 +207,7 @@ The suites cover:
 - **Concurrency**: duplicate and concurrent submissions are graded exactly once.
 - **Persistence**: answers, review marks and position survive refreshes; offline answers are queued and synced; the local backup is restored after a reload.
 - **Validation and errors**: input validation, upload limits, scanned or corrupt PDFs, every OpenAI failure mode (bad key, quota, rate limit, timeout, connection, context length, malformed output).
+- **PDF export**: heading, instructions and sections, answer key matching shuffled versions, pagination of long tests, Unicode text.
 - **UI**: the full create → publish → take → grade flow, search, filter, duplicate and delete, unsaved-change guards, and mobile layouts with no horizontal scrolling.
 - **Console**: every end-to-end test fails on browser console errors.
 
@@ -219,6 +221,8 @@ The suites cover:
 | `POST` | `/api/tests/generate` | Generate a draft test with AI (multipart: fields + optional file) |
 | `GET / PUT / DELETE` | `/api/tests/{id}` | Read, fully update or delete a test |
 | `POST` | `/api/tests/{id}/duplicate` | Copy a test as a draft |
+| `GET` | `/api/tests/{id}/pdf/defaults` | Suggested heading and instructions for the PDF |
+| `POST` | `/api/tests/{id}/pdf` | Download a printable PDF (paper, answer sheet, answer key) |
 | `POST` | `/api/tests/{id}/attempts` | Start an attempt, or resume the running one |
 | `GET` | `/api/attempts/{id}` | Exam state (no correct answers) and server time |
 | `PUT` | `/api/attempts/{id}/answers/{position}` | Autosave one answer |
@@ -241,7 +245,8 @@ McqGen/
 │   │   ├── models.py            # Test, Question, Attempt, AttemptAnswer
 │   │   ├── schemas.py           # request/response models
 │   │   ├── routers/             # tests, attempts, health + analytics
-│   │   └── services/            # generation, documents, catalog, attempts, grading, analytics
+│   │   ├── services/            # generation, documents, catalog, attempts, grading, analytics, pdf_export
+│   │   └── assets/fonts/        # DejaVu fonts for PDF export
 │   ├── tests/                   # pytest suites + e2e demo server
 │   └── requirements*.txt
 ├── frontend/
@@ -267,4 +272,4 @@ McqGen/
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The bundled DejaVu fonts (`backend/app/assets/fonts`) are distributed under their own free license (see `LICENSE-DejaVu.txt`).

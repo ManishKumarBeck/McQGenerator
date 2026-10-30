@@ -1,4 +1,4 @@
-import { Clock, Copy, FileQuestion, MoreVertical, Pencil, Play, RotateCcw, Sparkles, Trash2, Trophy } from "lucide-react";
+import { Clock, Copy, FileDown, FileQuestion, MoreVertical, Pencil, Play, RotateCcw, Sparkles, Trash2, Trophy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { formatMarks, formatPercent, formatRelative, pluralize, scoreTone } from "../../lib/format";
@@ -10,9 +10,10 @@ interface Props {
   test: TestSummary;
   onDuplicate: (test: TestSummary) => void;
   onDelete: (test: TestSummary) => void;
+  onDownload: (test: TestSummary) => void;
 }
 
-export function TestCard({ test, onDuplicate, onDelete }: Props) {
+export function TestCard({ test, onDuplicate, onDelete, onDownload }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +73,17 @@ export function TestCard({ test, onDuplicate, onDelete }: Props) {
                 }}
               >
                 <Copy className="size-4" /> Duplicate
+              </button>
+              <button
+                role="menuitem"
+                disabled={test.question_count === 0}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDownload(test);
+                }}
+              >
+                <FileDown className="size-4" /> Download PDF
               </button>
               <button
                 role="menuitem"

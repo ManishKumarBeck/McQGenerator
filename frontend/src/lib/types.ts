@@ -202,3 +202,19 @@ export interface HealthStatus {
   ai_configured: boolean;
   model: string;
 }
+
+export interface PdfExportOptions {
+  institution: string;
+  title: string;
+  subtitle: string;
+  exam_date: string;
+  version_label: string;
+  instructions: string;
+  show_details: boolean;
+  student_fields: boolean;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  include_answer_sheet: boolean;
+  include_answer_key: boolean;
+  include_explanations: boolean;
+}

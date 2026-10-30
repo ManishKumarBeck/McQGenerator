@@ -3,6 +3,7 @@ import { ListChecks, PenLine, Plus, Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { PdfExportDialog } from "../components/tests/PdfExportDialog";
 import { TestCard } from "../components/tests/TestCard";
 import { ButtonLink } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/Modal";
@@ -20,6 +21,7 @@ export function TestsPage() {
   const [search, setSearch] = useState(params.get("q") ?? "");
   const [debounced, setDebounced] = useState(search);
   const [toDelete, setToDelete] = useState<TestSummary | null>(null);
+  const [toDownload, setToDownload] = useState<TestSummary | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(search.trim()), 250);
@@ -133,11 +135,12 @@ export function TestsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tests.data.map((test) => (
-            <TestCard key={test.id} test={test} onDuplicate={(t) => duplicate.mutate(t)} onDelete={setToDelete} />
+            <TestCard key={test.id} test={test} onDuplicate={(t) => duplicate.mutate(t)} onDelete={setToDelete} onDownload={setToDownload} />
           ))}
         </div>
       )}
 
+      {toDownload && <PdfExportDialog testId={toDownload.id} open onClose={() => setToDownload(null)} />}
       <ConfirmDialog
         open={toDelete !== null}
         title={`Delete “${toDelete?.title ?? ""}”?`}
