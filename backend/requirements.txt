@@ -8,3 +8,4 @@ python-multipart==0.0.32
 pypdf==6.21.4
 langchain-core==1.7.3
 langchain-openai==1.7.3
+fpdf2==2.9.0

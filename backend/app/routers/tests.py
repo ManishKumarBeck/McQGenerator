@@ -11,6 +11,7 @@ from ..services import attempts as attempt_service
 from ..services import catalog
 from ..services.documents import extract_text_from_upload, prepare_source_text
 from ..services.generation import GenerationParams
+from ..services.pdf_export import default_options, pdf_filename, render_test_pdf
 
 router = APIRouter(prefix="/api/tests", tags=["tests"])
 
@@ -111,6 +112,29 @@ def delete_test(test_id: int, db: DbSession):
 @router.post("/{test_id}/duplicate", response_model=schemas.TestDetail, status_code=status.HTTP_201_CREATED)
 def duplicate_test(test_id: int, db: DbSession):
     return catalog.build_test_detail(db, catalog.duplicate_test(db, test_id))
+
+
+@router.get("/{test_id}/pdf/defaults", response_model=schemas.PdfExportOptions)
+def pdf_defaults(test_id: int, db: DbSession):
+    """Suggested heading, subtitle and instructions for the PDF export form."""
+    return default_options(catalog.get_test(db, test_id))
+
+
+@router.post(
+    "/{test_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "Printable question paper"}},
+)
+def export_pdf(test_id: int, options: schemas.PdfExportOptions, db: DbSession):
+    """Download the test as a printable PDF (paper, optional answer sheet and answer key)."""
+    test = catalog.get_test(db, test_id)
+    content = render_test_pdf(test, options)
+    filename = pdf_filename(test, options)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{test_id}/attempts", response_model=schemas.AttemptSession)

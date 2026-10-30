@@ -124,6 +124,24 @@ class TestDetail(TestSummary):
     questions: list[QuestionOut]
 
 
+class PdfExportOptions(BaseModel):
+    """Layout options for the printable PDF of a test."""
+
+    institution: Annotated[str, StringConstraints(strip_whitespace=True, max_length=150)] = ""
+    title: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = ""
+    subtitle: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = ""
+    exam_date: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] = ""
+    version_label: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] = ""
+    instructions: Annotated[str, StringConstraints(strip_whitespace=True, max_length=3000)] = ""
+    show_details: bool = True
+    student_fields: bool = True
+    shuffle_questions: bool = False
+    shuffle_options: bool = False
+    include_answer_sheet: bool = False
+    include_answer_key: bool = True
+    include_explanations: bool = True
+
+
 class GenerateTestResponse(BaseModel):
     test: TestDetail
     warnings: list[str] = Field(default_factory=list)
