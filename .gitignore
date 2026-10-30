@@ -1,5 +1,41 @@
-env
+# Secrets
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
+*.py[cod]
 *.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local data & logs
+backend/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 logs/
+*.log
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
