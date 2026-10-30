@@ -1,0 +1,24 @@
+[project]
+name = "mcq-exam-backend"
+version = "1.0.0"
+description = "FastAPI backend for the AI MCQ exam platform"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "B008",   # FastAPI uses calls in argument defaults (Depends, Query)
+    "RUF001", # ambiguous unicode characters are intentional in test data
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
