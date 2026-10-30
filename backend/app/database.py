@@ -1,7 +1,7 @@
 """Database engine, session factory and shared column types."""
 
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Request
@@ -10,8 +10,6 @@ from sqlalchemy.engine import Dialect, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.types import TypeDecorator
-
-UTC = timezone.utc
 
 
 class Base(DeclarativeBase):

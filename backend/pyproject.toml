@@ -2,11 +2,11 @@
 name = "mcq-exam-backend"
 version = "1.0.0"
 description = "FastAPI backend for the AI MCQ exam platform"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 110
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["data"]
 
 [tool.ruff.lint]
@@ -22,3 +22,7 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = [
+    # Third-party deprecation noise on Python 3.14 (langsmith, pulled in by langchain-core).
+    "ignore::DeprecationWarning:langsmith.*",
+]
