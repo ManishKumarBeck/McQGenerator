@@ -78,7 +78,7 @@ function ExportForm({ testId, defaults, onDone }: { testId: number; defaults: Pd
 
   return (
     <form onSubmit={onSubmit} noValidate>
-      <fieldset disabled={download.isPending} className="space-y-5">
+      <fieldset disabled={download.isPending} className="min-w-0 space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field htmlFor={`${id}-institution`} label="Institution / organisation" className="sm:col-span-2" hint="Shown at the very top. Remembered for next time.">
             <Input

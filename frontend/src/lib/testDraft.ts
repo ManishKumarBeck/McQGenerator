@@ -11,6 +11,7 @@ export interface DraftQuestion {
   correct_option: number;
   explanation: string;
   topic: string;
+  source_ref: string;
 }
 
 export interface DraftTest {
@@ -32,7 +33,7 @@ let keyCounter = 0;
 export const newKey = () => `q-${Date.now().toString(36)}-${(keyCounter++).toString(36)}`;
 
 export function newQuestion(topic = ""): DraftQuestion {
-  return { key: newKey(), text: "", options: ["", "", "", ""], correct_option: 0, explanation: "", topic };
+  return { key: newKey(), text: "", options: ["", "", "", ""], correct_option: 0, explanation: "", topic, source_ref: "" };
 }
 
 export function emptyDraft(): DraftTest {
@@ -73,6 +74,7 @@ export function draftFromTest(test: TestDetail): DraftTest {
       correct_option: q.correct_option,
       explanation: q.explanation,
       topic: q.topic,
+      source_ref: q.source_ref ?? "",
     })),
   };
 }
@@ -153,6 +155,7 @@ export function toPayload(draft: DraftTest, status: TestStatus): TestWrite {
       correct_option: q.correct_option,
       explanation: q.explanation.trim(),
       topic: q.topic.trim(),
+      source_ref: q.source_ref.trim(),
     })),
   };
 }

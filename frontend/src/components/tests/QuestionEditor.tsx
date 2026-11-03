@@ -73,7 +73,7 @@ export function QuestionEditor({ index, total, question, errors, showErrors, onC
         />
       </Field>
 
-      <fieldset className="mt-4">
+      <fieldset className="mt-4 min-w-0">
         <legend className="mb-2 text-sm font-medium text-fg">
           Options <span className="font-normal text-muted">— select the correct answer</span>
         </legend>
@@ -145,6 +145,15 @@ export function QuestionEditor({ index, total, question, errors, showErrors, onC
           <Input id={`${id}-topic`} maxLength={150} value={question.topic} placeholder="e.g. Queues" onChange={(e) => update({ topic: e.target.value })} />
         </Field>
       </div>
+      <Field htmlFor={`${id}-source`} label="Source reference" className="mt-4" hint="Optional — where the answer can be found, e.g. a book and page.">
+        <Input
+          id={`${id}-source`}
+          maxLength={300}
+          value={question.source_ref}
+          placeholder="e.g. Campbell Biology, p. 142"
+          onChange={(e) => update({ source_ref: e.target.value })}
+        />
+      </Field>
     </Card>
   );
 }

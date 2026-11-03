@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { EditTestPage } from "./pages/EditTestPage";
 import { ExamPage } from "./pages/ExamPage";
 import { HistoryPage } from "./pages/HistoryPage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ResultPage } from "./pages/ResultPage";
 import { TestDetailPage } from "./pages/TestDetailPage";
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
       { path: "tests/:testId", element: <TestDetailPage /> },
       { path: "tests/:testId/edit", element: <EditTestPage /> },
       { path: "attempts/:attemptId/result", element: <ResultPage /> },
+      { path: "library", element: <LibraryPage /> },
       { path: "history", element: <HistoryPage /> },
       {
         path: "analytics",

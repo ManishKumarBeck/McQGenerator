@@ -1,20 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { FileText, KeyRound, PenLine, Sparkles, Upload, X } from "lucide-react";
+import { BookOpen, FileText, Globe, KeyRound, Library, PenLine, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { DIFFICULTY_OPTIONS } from "../components/tests/TestSettingsForm";
 import { Button, ButtonLink } from "../components/ui/Button";
-import { Alert, Card, Field, Input, PageHeader, Segmented, Switch, Textarea } from "../components/ui/primitives";
+import { Alert, Badge, Card, Field, Input, PageHeader, Segmented, Spinner, Switch, Textarea } from "../components/ui/primitives";
 import { api, ApiError } from "../lib/api";
+import { pluralize } from "../lib/format";
 import type { Difficulty } from "../lib/types";
 
 const MAX_FILE_MB = 5;
 const ACCEPTED = [".pdf", ".txt", ".md"];
 const MAX_QUESTIONS = 30;
 
-type SourceMode = "topic" | "text" | "file";
+type SourceMode = "topic" | "text" | "file" | "library";
 
 const LOADING_MESSAGES = [
   "Reading your material…",
@@ -36,7 +37,14 @@ export function CreateTestPage() {
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [count, setCount] = useState<number | "">(10);
-  const [mode, setMode] = useState<SourceMode>("topic");
+  const [params] = useSearchParams();
+  const preselected = Number(params.get("source"));
+  const [mode, setMode] = useState<SourceMode>(preselected ? "library" : "topic");
+  const [selectedSources, setSelectedSources] = useState<number[]>(preselected ? [preselected] : []);
+  const [focus, setFocus] = useState("");
+  const sources = useQuery({ queryKey: ["sources"], queryFn: api.listSources, enabled: mode === "library" });
+  const readySources = sources.data?.filter((s) => s.status === "ready") ?? [];
+  const chosenSources = selectedSources.filter((sourceId) => readySources.some((s) => s.id === sourceId));
   const [sourceText, setSourceText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [instructions, setInstructions] = useState("");
@@ -67,6 +75,8 @@ export function CreateTestPage() {
           negative_marks: Number(negative),
           quality_review: review,
           file: mode === "file" ? file : null,
+          source_ids: mode === "library" ? chosenSources : undefined,
+          focus: mode === "library" ? focus.trim() : undefined,
         },
         abortRef.current.signal,
       );
@@ -118,6 +128,7 @@ export function CreateTestPage() {
     if (mode === "topic" && !subject.trim() && !topic.trim()) next.topic = "Enter a subject or topic to generate from.";
     if (mode === "text" && sourceText.trim().length < 50) next.sourceText = "Paste at least a paragraph (50+ characters) of material.";
     if (mode === "file" && !file) next.file = "Choose a file to upload.";
+    if (mode === "library" && chosenSources.length === 0) next.library = "Select at least one source from your library.";
     if (duration !== "" && (!Number.isInteger(duration) || duration < 1 || duration > 600)) next.duration = "1–600 minutes.";
     if (marks === "" || marks <= 0 || marks > 100) next.marks = "Must be greater than 0.";
     if (negative === "" || negative < 0) next.negative = "Can't be negative.";
@@ -162,10 +173,12 @@ export function CreateTestPage() {
       )}
 
       <form onSubmit={onSubmit} noValidate>
-        <fieldset disabled={busy} className="space-y-6">
+        <fieldset disabled={busy} className="min-w-0 space-y-6">
           <Card className="p-4 sm:p-6">
             <h2 className="mb-1 text-base font-semibold">What should the questions cover?</h2>
-            <p className="mb-4 text-sm text-muted">Pick a source. Uploaded and pasted material keeps questions grounded in your content.</p>
+            <p className="mb-4 text-sm text-muted">
+              Pick a source. Your own material — pasted, uploaded or from your library — keeps questions grounded in it.
+            </p>
             <Segmented<SourceMode>
               ariaLabel="Question source"
               className="mb-5 flex w-full"
@@ -175,8 +188,76 @@ export function CreateTestPage() {
                 { value: "topic", label: "Topic" },
                 { value: "text", label: "Paste text" },
                 { value: "file", label: "Upload file" },
+                { value: "library", label: "Library" },
               ]}
             />
+            {mode === "library" && (
+              <div className="mb-5 space-y-4">
+                {sources.isPending ? (
+                  <Spinner label="Loading library…" className="py-4" />
+                ) : readySources.length === 0 ? (
+                  <Alert tone="info" icon={<Library className="size-4" />} title="Your library has no ready sources yet">
+                    <Link to="/library" className="font-semibold underline">
+                      Add a book, document or link
+                    </Link>{" "}
+                    first. It's indexed once and can be reused for every test.
+                  </Alert>
+                ) : (
+                  <fieldset className="min-w-0">
+                    <legend className="mb-2 flex w-full items-center justify-between text-sm font-medium">
+                      <span>Sources to use</span>
+                      <Link to="/library" className="text-xs font-normal text-brand-600 hover:underline dark:text-brand-400">
+                        Manage library
+                      </Link>
+                    </legend>
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {readySources.map((source) => {
+                        const checked = selectedSources.includes(source.id);
+                        return (
+                          <label
+                            key={source.id}
+                            className={clsx(
+                              "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
+                              checked ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "border-line hover:bg-surface-2",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="size-4 accent-brand-600"
+                              checked={checked}
+                              onChange={() =>
+                                setSelectedSources((current) =>
+                                  checked ? current.filter((id) => id !== source.id) : [...current, source.id],
+                                )
+                              }
+                            />
+                            <span className="text-muted">
+                              {source.kind === "url" ? <Globe className="size-4" /> : source.file_type === "epub" ? <BookOpen className="size-4" /> : <FileText className="size-4" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">{source.title}</span>
+                              <span className="block text-xs text-muted">
+                                {source.page_count ? `${source.page_count} pages · ` : ""}
+                                {pluralize(source.chunk_count, "passage")}
+                              </span>
+                            </span>
+                            {!source.semantic_search && <Badge>Keyword search</Badge>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {errors.library && <p className="mt-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">{errors.library}</p>}
+                  </fieldset>
+                )}
+                <Field
+                  htmlFor={`${id}-focus`}
+                  label="Focus on (optional)"
+                  hint="A chapter, topic or keywords — only the most relevant passages are used. Leave empty to cover the whole source."
+                >
+                  <Input id={`${id}-focus`} value={focus} maxLength={300} placeholder="e.g. Chapter 4: cellular respiration" onChange={(e) => setFocus(e.target.value)} />
+                </Field>
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field htmlFor={`${id}-subject`} label="Subject">
                 <Input id={`${id}-subject`} value={subject} maxLength={100} placeholder="e.g. Biology" onChange={(e) => setSubject(e.target.value)} />

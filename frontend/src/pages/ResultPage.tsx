@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Check, CheckCircle2, Circle, Clock, Flag, Lightbulb, RotateCcw, Target, Timer, XCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, CheckCircle2, Circle, Clock, Flag, Lightbulb, RotateCcw, Target, Timer, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
@@ -229,6 +229,11 @@ function ReviewCard({ question: q }: { question: ResultQuestion }) {
           <Lightbulb className="mt-0.5 size-4 shrink-0 text-amber-500" />
           <p className="leading-relaxed text-muted">{q.explanation}</p>
         </div>
+      )}
+      {q.source_ref && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-muted" data-testid="source-ref">
+          <BookOpen className="size-3.5 shrink-0" /> Source: {q.source_ref}
+        </p>
       )}
     </Card>
   );

@@ -10,6 +10,8 @@ import type {
   GenerateTestResponse,
   HealthStatus,
   PdfExportOptions,
+  SourceItem,
+  SourceSearchHit,
   SubmitReason,
   TestDetail,
   TestStatus,
@@ -127,7 +129,8 @@ export const api = {
     const form = new FormData();
     for (const [key, value] of Object.entries(input)) {
       if (key === "file" || value === undefined || value === null || value === "") continue;
-      form.append(key, String(value));
+      if (Array.isArray(value)) value.forEach((item) => form.append(key, String(item)));
+      else form.append(key, String(value));
     }
     if (input.file) form.append("file", input.file);
     return request<GenerateTestResponse>("/api/tests/generate", { method: "POST", body: form, signal });
@@ -157,4 +160,18 @@ export const api = {
   deleteAttempt: (id: string) => request<void>(`/api/attempts/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   analytics: () => request<AnalyticsOverview>("/api/analytics"),
+
+  listSources: () => request<SourceItem[]>("/api/sources"),
+  uploadSource: (file: File, title = "") => {
+    const form = new FormData();
+    form.append("file", file);
+    if (title) form.append("title", title);
+    return request<SourceItem>("/api/sources/upload", { method: "POST", body: form });
+  },
+  addUrlSource: (url: string, title = "") => request<SourceItem>("/api/sources/url", json("POST", { url, title })),
+  renameSource: (id: number, title: string) => request<SourceItem>(`/api/sources/${id}`, json("PATCH", { title })),
+  deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: "DELETE" }),
+  reindexSource: (id: number) => request<SourceItem>(`/api/sources/${id}/reindex`, { method: "POST" }),
+  searchSource: (id: number, q: string) =>
+    request<SourceSearchHit[]>(`/api/sources/${id}/search${query({ q, limit: 6 })}`),
 };

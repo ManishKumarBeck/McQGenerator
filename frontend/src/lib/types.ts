@@ -13,6 +13,7 @@ export interface Question {
   correct_option: number;
   explanation: string;
   topic: string;
+  source_ref: string;
 }
 
 export interface QuestionInput {
@@ -22,6 +23,7 @@ export interface QuestionInput {
   correct_option: number;
   explanation: string;
   topic: string;
+  source_ref: string;
 }
 
 export interface TestSettings {
@@ -91,6 +93,8 @@ export interface GenerateTestInput {
   negative_marks: number;
   quality_review: boolean;
   file?: File | null;
+  source_ids?: number[];
+  focus?: string;
 }
 
 export interface AttemptSummary {
@@ -165,6 +169,7 @@ export interface ResultQuestion {
   marked_for_review: boolean;
   explanation: string;
   topic: string;
+  source_ref: string;
   time_spent_seconds: number;
 }
 
@@ -217,4 +222,33 @@ export interface PdfExportOptions {
   include_answer_sheet: boolean;
   include_answer_key: boolean;
   include_explanations: boolean;
+}
+
+export type SourceStatus = "processing" | "ready" | "failed";
+
+export interface SourceItem {
+  id: number;
+  title: string;
+  kind: "file" | "url";
+  file_type: string;
+  origin: string;
+  status: SourceStatus;
+  progress: number;
+  error: string;
+  notes: string;
+  char_count: number;
+  chunk_count: number;
+  page_count: number | null;
+  semantic_search: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceSearchHit {
+  position: number;
+  citation: string;
+  text: string;
+  score: number;
+  keyword_score: number;
+  semantic_score: number | null;
 }

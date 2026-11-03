@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { BarChart3, History, LayoutDashboard, ListChecks, Moon, Plus, Sun } from "lucide-react";
+import { BarChart3, History, LayoutDashboard, Library, ListChecks, Moon, Plus, Sun } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useEffect } from "react";
 import { useTheme } from "../../hooks/useTheme";
@@ -8,6 +8,7 @@ import { Button, ButtonLink } from "../ui/Button";
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/tests", label: "Tests", icon: ListChecks, end: false },
+  { to: "/library", label: "Library", icon: Library, end: false },
   { to: "/history", label: "History", icon: History, end: false },
   { to: "/analytics", label: "Analytics", icon: BarChart3, end: false },
 ];
@@ -84,7 +85,7 @@ export function AppLayout() {
 
       <nav
         aria-label="Main mobile"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink

@@ -1,6 +1,6 @@
 # McqGen — AI MCQ Exam Platform
 
-Generate multiple-choice tests with AI from a topic, your notes or a PDF, review and edit every question, then take timed exams with a real exam interface and track your performance over time.
+Generate multiple-choice tests with AI from a topic, your notes, or a whole book in your **source library** (RAG with citations), review and edit every question, then take timed exams with a real exam interface and track your performance over time.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -10,8 +10,15 @@ McqGen started as a small LangChain + Streamlit script that turned a document in
 
 ## Features
 
+**Source library (RAG)**
+- Add **books and documents** (PDF, Word `.docx`, EPUB, TXT, Markdown — up to 25 MB) or **web links** (articles or online PDFs) once, and reuse them for every test.
+- Each source is extracted, split into page-aware passages and embedded with OpenAI `text-embedding-3-small`, stored in SQLite. Without an API key it still works with keyword search.
+- **Focused generation**: type a chapter, topic or keywords and only the most relevant passages are retrieved (hybrid BM25 + vector search, fused with reciprocal-rank fusion and diversified with MMR). Leave it empty to sample passages **across the whole book**.
+- Every generated question carries a **citation** (e.g. *Campbell Biology, p. 142*) shown in the editor, the results review and the PDF answer key.
+- **Search inside** a source to preview exactly which passages retrieval would use; indexing runs in the background with live progress, retries and re-indexing.
+
 **Test creation**
-- **AI generation** from a topic, pasted text, or an uploaded **PDF / TXT / MD** file (OpenAI via LangChain structured output).
+- **AI generation** from a topic, pasted text, an uploaded **PDF / TXT / MD** file, or your library (OpenAI via LangChain structured output).
 - Configure question count (1–30 per run), **difficulty** (easy / medium / hard / mixed), subject, topic, audience/category and extra instructions.
 - Optional **AI quality review** pass that checks accuracy and wording (the original project's "expert reviewer" chain, now structured).
 - Every AI question includes an **explanation** and a **sub-topic** for analytics. Output is validated: malformed or duplicate questions are discarded and answer positions are shuffled to avoid bias.
@@ -44,12 +51,14 @@ McqGen started as a small LangChain + Streamlit script that turned a document in
 
 ## Screenshots
 
-| Generate with AI | Exam |
+| Source library | Generate from the library |
 | --- | --- |
+| ![Library](docs/screenshots/library.png) | ![Generate from library](docs/screenshots/generate-library.png) |
+| **Generate with AI** | **Exam** |
 | ![Generate](docs/screenshots/generate.png) | ![Exam](docs/screenshots/exam.png) |
 | **Submit confirmation** | **Results & answer review** |
 | ![Submit](docs/screenshots/submit-confirm.png) | ![Result](docs/screenshots/result.png) |
-| **Test library** | **Analytics (dark mode)** |
+| **Your tests** | **Analytics (dark mode)** |
 | ![Tests](docs/screenshots/tests.png) | ![Analytics](docs/screenshots/analytics-dark.png) |
 
 <p align="center">
@@ -71,9 +80,14 @@ flowchart LR
     subgraph Server["FastAPI"]
         API[Routers] --> SVC[Services<br/>catalog · attempts · grading · analytics]
         API --> GEN[Generation service<br/>LangChain structured output]
+        API --> LIB[Source library<br/>extract · chunk · embed · retrieve]
+        LIB --> GEN
         SVC --> DB[(SQLite via SQLAlchemy)]
+        LIB --> DB
     end
     GEN -- HTTPS --> OAI[OpenAI API]
+    LIB -- embeddings --> OAI
+    LIB -- fetch links --> WEB[Web pages / online PDFs]
 ```
 
 | Layer | Technology |
@@ -82,7 +96,8 @@ flowchart LR
 | Backend | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2, pydantic-settings |
 | AI | LangChain (`langchain-openai`) with JSON-schema structured output, OpenAI chat models |
 | Storage | SQLite by default (any SQLAlchemy database such as PostgreSQL via `DATABASE_URL`) |
-| Documents | `pypdf` for PDF text extraction, `fpdf2` with bundled DejaVu fonts for PDF export |
+| Documents | `pypdf`, `python-docx`, `ebooklib` + BeautifulSoup for extraction; `fpdf2` with bundled DejaVu fonts for PDF export |
+| Retrieval | OpenAI `text-embedding-3-small`, NumPy cosine similarity, a small BM25 implementation, RRF + MMR |
 | Testing | pytest, Vitest + Testing Library, Playwright (end-to-end, desktop and mobile) |
 | Quality | Ruff (lint + format), ESLint, TypeScript strict mode, GitHub Actions CI |
 
@@ -93,6 +108,8 @@ flowchart LR
 - **Snapshots for history.** When an attempt starts, the questions (in their displayed, possibly shuffled order) and the marking scheme are copied into the attempt. Results stay correct even if the test is edited or deleted.
 - **Correct answers never reach the exam screen.** The exam endpoint returns questions without answers or explanations; they're only exposed in results.
 - **Structured AI output.** Instead of parsing free-form JSON (the original project broke when the model wrapped JSON in Markdown fences), the model returns a JSON-schema-validated object. Every question is then sanitised and validated. Prompts are built as messages, not templates, so braces in source text can't break them, and the source text is treated as data to resist prompt injection.
+- **RAG without extra infrastructure.** Vectors are stored as normalised float32 blobs in the same database and searched with NumPy, which is fast for a personal library of thousands of passages. Moving to `pgvector` later only touches the retrieval module. Token usage scales with the number of questions (about 2,500 characters of context per question, capped at `MAX_SOURCE_CHARS`), and indexing a 300-page book costs roughly a third of a US cent.
+- **Safe link fetching.** Only `http(s)` links, every redirect is re-checked, and hosts that resolve to private, loopback or link-local addresses are refused, with size and time limits. Fetched text is treated as data in prompts.
 - **Free and local by default.** SQLite, no auth, no external services except the OpenAI API.
 
 ## Getting started
@@ -171,6 +188,11 @@ All settings are read from `.env` in the project root (or `backend/.env`). Real 
 | `OPENAI_TEMPERATURE` | `0.4` | Sampling temperature. |
 | `OPENAI_TIMEOUT_SECONDS` | `90` | Per-request timeout. |
 | `OPENAI_MAX_RETRIES` | `2` | Automatic retries for transient OpenAI errors. |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for the source library. |
+| `MAX_LIBRARY_UPLOAD_MB` | `25` | Maximum size of a library file or downloaded link. |
+| `MAX_LIBRARY_CHARS` | `3000000` | Text beyond this (~1,500 pages) is not indexed, with a note on the source. |
+| `URL_FETCH_TIMEOUT_SECONDS` | `20` | Timeout when downloading a link. |
+| `ALLOW_PRIVATE_URLS` | `false` | Allow links to localhost/private networks (local development only). |
 | `DATABASE_URL` | `sqlite:///backend/data/mcq_exam.db` | Any SQLAlchemy URL. |
 | `MAX_UPLOAD_MB` | `5` | Maximum upload size. |
 | `MAX_SOURCE_CHARS` | `40000` | Longer source material is truncated (with a warning) to control token usage. |
@@ -207,6 +229,7 @@ The suites cover:
 - **Concurrency**: duplicate and concurrent submissions are graded exactly once.
 - **Persistence**: answers, review marks and position survive refreshes; offline answers are queued and synced; the local backup is restored after a reload.
 - **Validation and errors**: input validation, upload limits, scanned or corrupt PDFs, every OpenAI failure mode (bad key, quota, rate limit, timeout, connection, context length, malformed output).
+- **Source library**: extraction from PDF (with pages), Word, EPUB, Markdown and HTML; chunking and overlap; BM25, hybrid ranking and whole-book coverage; safe fetching (redirects to private addresses, size limits, bad content types); background indexing, failure and retry; citations flowing into tests, results and PDFs; upgrading databases from earlier versions.
 - **PDF export**: heading, instructions and sections, answer key matching shuffled versions, pagination of long tests, Unicode text.
 - **UI**: the full create → publish → take → grade flow, search, filter, duplicate and delete, unsaved-change guards, and mobile layouts with no horizontal scrolling.
 - **Console**: every end-to-end test fails on browser console errors.
@@ -230,6 +253,11 @@ The suites cover:
 | `GET` | `/api/attempts/{id}/result` | Graded result with explanations and topic breakdown |
 | `GET / DELETE` | `/api/attempts`, `/api/attempts/{id}` | History and deletion |
 | `GET` | `/api/analytics` | Aggregated performance statistics |
+| `GET` | `/api/sources` | Library sources with indexing status |
+| `POST` | `/api/sources/upload`, `/api/sources/url` | Add a file or a link (indexed in the background) |
+| `GET / PATCH / DELETE` | `/api/sources/{id}` | Read, rename or delete a source |
+| `POST` | `/api/sources/{id}/reindex` | Retry a failed link or re-embed a file |
+| `GET` | `/api/sources/{id}/search?q=` | Preview the passages retrieval would use |
 
 Errors use a consistent shape: `{"detail": "Human-readable message", "code": "machine_code"}`.
 
@@ -242,16 +270,18 @@ McqGen/
 │   │   ├── main.py              # app factory, CORS, SPA serving
 │   │   ├── config.py            # settings from .env
 │   │   ├── database.py          # engine, sessions, UTC datetime type
-│   │   ├── models.py            # Test, Question, Attempt, AttemptAnswer
+│   │   ├── models.py            # Test, Question, Attempt, AttemptAnswer, Source, SourceChunk
 │   │   ├── schemas.py           # request/response models
-│   │   ├── routers/             # tests, attempts, health + analytics
+│   │   ├── routers/             # tests, attempts, sources, health + analytics
+│   │   ├── migrations.py        # additive column upgrades for existing databases
 │   │   ├── services/            # generation, documents, catalog, attempts, grading, analytics, pdf_export
+│   │   │   └── sources/         # RAG: extract, chunking, embeddings, retrieval, fetch, library
 │   │   └── assets/fonts/        # DejaVu fonts for PDF export
 │   ├── tests/                   # pytest suites + e2e demo server
 │   └── requirements*.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/               # Dashboard, Tests, Create, Edit, Detail, Exam, Result, History, Analytics
+│   │   ├── pages/               # Dashboard, Tests, Create, Edit, Detail, Exam, Result, Library, History, Analytics
 │   │   ├── components/          # ui primitives, exam, tests, charts, layout
 │   │   ├── hooks/               # useExamSession, useLeaveGuard, useTheme
 │   │   └── lib/                 # API client, types, exam & draft logic, formatting
@@ -265,6 +295,7 @@ McqGen/
 
 - User accounts and authentication (the data model is ready for an owner column)
 - Alembic migrations and a PostgreSQL deployment profile
+- OCR for scanned PDFs, and `pgvector` for very large shared libraries
 - Question bank import/export (CSV/JSON) and "add more AI questions" to an existing test
 - Practice mode with instant feedback, and "retry only wrong answers"
 - Shareable test links and leaderboards
