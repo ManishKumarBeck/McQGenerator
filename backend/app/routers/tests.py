@@ -3,15 +3,19 @@
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
+from sqlalchemy.orm import Session
 
 from .. import schemas
-from ..dependencies import AppSettings, DbSession, Generator
+from ..config import Settings
+from ..dependencies import AppSettings, DbSession, EmbedderFactoryDep, Generator
 from ..errors import InvalidInputError
 from ..services import attempts as attempt_service
 from ..services import catalog
 from ..services.documents import extract_text_from_upload, prepare_source_text
-from ..services.generation import GenerationParams
+from ..services.generation import GenerationParams, GenerationResult, QuestionGenerator
 from ..services.pdf_export import default_options, pdf_filename, render_test_pdf
+from ..services.sources import library
+from ..services.sources.library import EmbedderFactory
 
 router = APIRouter(prefix="/api/tests", tags=["tests"])
 
@@ -40,6 +44,7 @@ def generate_test(
     db: DbSession,
     settings: AppSettings,
     generator: Generator,
+    embedder_factory: EmbedderFactoryDep,
     file: Annotated[UploadFile | None, File()] = None,
 ):
     """Generate MCQs with AI and save them as a draft test ready for review."""
@@ -48,8 +53,12 @@ def generate_test(
             f"You can generate at most {settings.max_questions_per_generation} questions at a time."
         )
 
+    has_file = file is not None and bool(file.filename)
+    if form.source_ids:
+        return _generate_from_library(form, db, settings, generator, embedder_factory, has_file)
+
     source = form.source_text
-    if file is not None and file.filename:
+    if has_file:
         data = file.file.read(settings.max_upload_bytes + 1)
         file_text = extract_text_from_upload(file.filename, data, max_bytes=settings.max_upload_bytes)
         source = f"{source}\n\n{file_text}".strip() if source else file_text
@@ -75,6 +84,49 @@ def generate_test(
     # Sync endpoint: FastAPI runs it in a worker thread, so the blocking LLM call is fine.
     result = generator.generate(params)
 
+    return _save_generated(form, db, result, warnings)
+
+
+def _generate_from_library(
+    form: schemas.GenerateTestForm,
+    db: Session,
+    settings: Settings,
+    generator: QuestionGenerator,
+    embedder_factory: EmbedderFactory,
+    has_file: bool,
+) -> schemas.GenerateTestResponse:
+    """Retrieval-augmented generation: find relevant passages in the library, then generate."""
+    if has_file or form.source_text:
+        raise InvalidInputError("Use either library sources or uploaded/pasted material, not both.")
+    needs_title = not (form.title or form.subject or form.topic)
+    if form.focus and not form.topic:
+        form = form.model_copy(update={"topic": form.focus[:150]})
+    # Fewer questions need less context: keeps token usage proportional.
+    budget = min(settings.max_source_chars, max(8_000, form.question_count * 2_500))
+    context = library.retrieve_context(
+        db, form.source_ids, focus=form.focus, budget_chars=budget, embedder_factory=embedder_factory
+    )
+    params = GenerationParams(
+        subject=form.subject,
+        topic=form.topic,
+        category=form.category,
+        difficulty=form.difficulty,
+        count=form.question_count,
+        source_text=context.text,
+        instructions=form.instructions,
+        quality_review=form.quality_review,
+        passage_refs=context.refs,
+    )
+    result = generator.generate(params)
+    if needs_title:
+        base = context.source_titles[0] if len(context.source_titles) == 1 else "Library"
+        form = form.model_copy(update={"title": f"{base} — {form.focus}" if form.focus else base})
+    return _save_generated(form, db, result, [])
+
+
+def _save_generated(
+    form: schemas.GenerateTestForm, db: Session, result: GenerationResult, warnings: list[str]
+) -> schemas.GenerateTestResponse:
     title = form.title or " - ".join(p for p in (form.subject, form.topic) if p) or "AI generated test"
     test_settings = schemas.TestSettings(
         title=title[:200],

@@ -177,6 +177,7 @@ def start_attempt(
                 correct_option=order.index(question.correct_option),
                 explanation=question.explanation,
                 topic=question.topic or test.topic,
+                source_ref=question.source_ref,
             )
         )
     db.add(attempt)
@@ -358,6 +359,7 @@ def to_result(
                 marked_for_review=a.marked_for_review,
                 explanation=a.explanation,
                 topic=a.topic,
+                source_ref=a.source_ref,
                 time_spent_seconds=a.time_spent_seconds,
             )
             for a in attempt.answers

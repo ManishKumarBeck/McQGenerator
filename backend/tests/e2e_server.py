@@ -7,13 +7,27 @@ Used by the Playwright end-to-end tests and handy for UI development without an 
 
 import argparse
 import time
+import zlib
 from pathlib import Path
 
+import numpy as np
 import uvicorn
+from fastapi.responses import HTMLResponse
 
 from app.config import Settings
 from app.main import FRONTEND_DIST, create_app
 from app.services.generation import GeneratedQuestion, GenerationParams, GenerationResult
+from app.services.sources.embeddings import normalise
+from app.services.sources.retrieval import tokenize
+
+DEMO_ARTICLE = """<!doctype html><html><head><title>Photosynthesis basics</title></head><body>
+<nav>Home | About</nav><article><h1>Photosynthesis basics</h1>
+<p>Photosynthesis is the process plants use to convert light energy into chemical energy. Chlorophyll in the
+chloroplasts absorbs sunlight. Carbon dioxide and water are turned into glucose and oxygen.</p>
+<h2>Light reactions</h2><p>In the light-dependent reactions water is split, oxygen is released and ATP and NADPH
+are produced in the thylakoid membranes.</p>
+<h2>Calvin cycle</h2><p>The Calvin cycle uses ATP and NADPH to fix carbon dioxide into sugars in the stroma.</p>
+</article></body></html>"""
 
 
 class DemoGenerator:
@@ -25,6 +39,7 @@ class DemoGenerator:
             from app.errors import GenerationError
 
             raise GenerationError("OpenAI rate limit reached. Wait a moment and try again.", status_code=429)
+        refs = list(params.passage_refs.values())
         questions = []
         for i in range(params.count):
             a, b = i + 2, i + 3
@@ -37,9 +52,23 @@ class DemoGenerator:
                     correct_option=1,
                     explanation=f"{a} + {b} = {correct}.",
                     topic="Addition" if i % 2 == 0 else "Mental math",
+                    source_ref=refs[i % len(refs)] if refs else "",
                 )
             )
         return GenerationResult(questions=questions, warnings=[], notes="")
+
+
+class DemoEmbedder:
+    """Offline hashing embedder (stable across processes) so the library works without a key."""
+
+    model = "demo-hashing"
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        matrix = np.zeros((len(texts), 256), dtype=np.float32)
+        for row, text in enumerate(texts):
+            for token in tokenize(text):
+                matrix[row, zlib.crc32(token.encode()) % 256] += 1.0
+        return normalise(matrix)
 
 
 def main() -> None:
@@ -60,11 +89,22 @@ def main() -> None:
         database_url=f"sqlite:///{db_path.as_posix()}",
         openai_api_key="sk-e2e-fake",
         submission_grace_seconds=args.grace,
+        allow_private_urls=True,  # lets e2e tests add the local demo article as a link
         cors_origins=["*"],
         serve_frontend=args.serve_frontend,
         log_level="WARNING",
     )
-    app = create_app(settings, generator=DemoGenerator(), frontend_dist=FRONTEND_DIST)
+    app = create_app(
+        settings, generator=DemoGenerator(), embedder_factory=DemoEmbedder, frontend_dist=FRONTEND_DIST
+    )
+
+    @app.get("/demo/article", include_in_schema=False)
+    def demo_article() -> HTMLResponse:
+        return HTMLResponse(DEMO_ARTICLE)
+
+    # Register before the SPA catch-all route (when --serve-frontend is used).
+    app.router.routes.insert(0, app.router.routes.pop())
+
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 
 

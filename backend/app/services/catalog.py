@@ -34,6 +34,7 @@ def _replace_questions(test: Test, questions: list[schemas.QuestionIn]) -> None:
         question.correct_option = item.correct_option
         question.explanation = item.explanation
         question.topic = item.topic
+        question.source_ref = item.source_ref
         updated.append(question)
     # Questions left in `existing` were removed by the user; delete-orphan cleans them up.
     test.questions = updated
@@ -65,6 +66,7 @@ def create_generated_test(
             correct_option=q.correct_option,
             explanation=q.explanation,
             topic=q.topic,
+            source_ref=q.source_ref,
         )
         for i, q in enumerate(questions)
     ]
@@ -106,6 +108,7 @@ def duplicate_test(db: Session, test_id: int) -> Test:
             correct_option=q.correct_option,
             explanation=q.explanation,
             topic=q.topic,
+            source_ref=q.source_ref,
         )
         for q in original.questions
     ]

@@ -34,6 +34,7 @@ class PaperQuestion:
     options: list[str]
     correct_option: int
     explanation: str
+    source_ref: str = ""
 
 
 def default_instructions(test: Test, count: int) -> str:
@@ -81,6 +82,7 @@ def build_paper(test: Test, options: schemas.PdfExportOptions) -> list[PaperQues
                 options=[question.options[i] for i in order],
                 correct_option=order.index(question.correct_option),
                 explanation=question.explanation,
+                source_ref=question.source_ref,
             )
         )
     return paper
@@ -308,12 +310,12 @@ def _answer_key(pdf: _PaperPDF, paper: list[PaperQuestion], title: str, explanat
             pdf.cell(cell_w * 0.5, 7, f"  {LETTERS[q.correct_option]}")
         pdf.ln(7)
 
-    if explanations and any(q.explanation for q in paper):
+    if explanations and any(q.explanation or q.source_ref for q in paper):
         pdf.rule(6)
         pdf.text_block("Explanations", 11, "B", INK, h=6)
         pdf.ln(1)
         for q in paper:
-            if not q.explanation:
+            if not (q.explanation or q.source_ref):
                 continue
             with pdf.unbreakable() as doc:
                 doc.set_font(FONT, "B", 9.5)
@@ -330,8 +332,11 @@ def _answer_key(pdf: _PaperPDF, paper: list[PaperQuestion], title: str, explanat
                 doc.set_font(FONT, "", 9)
                 doc.set_text_color(*MUTED)
                 doc.set_x(doc.l_margin + 5)
+                note = q.explanation
+                if q.source_ref:
+                    note = f"{note} (Source: {q.source_ref})" if note else f"Source: {q.source_ref}"
                 doc.multi_cell(
-                    doc.content_width - 5, 4.6, q.explanation, align="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+                    doc.content_width - 5, 4.6, note, align="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT
                 )
                 doc.ln(2.5)
 

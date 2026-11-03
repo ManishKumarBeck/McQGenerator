@@ -3,6 +3,7 @@
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,6 +12,7 @@ from app.database import utcnow
 from app.main import create_app
 from app.services import attempts as attempt_service
 from app.services.generation import GeneratedQuestion, GenerationParams, GenerationResult
+from app.services.sources.embeddings import normalise
 
 
 class FakeGenerator:
@@ -25,6 +27,7 @@ class FakeGenerator:
         self.calls.append(params)
         if self.error:
             raise self.error
+        refs = list(params.passage_refs.values())
         questions = [
             GeneratedQuestion(
                 text=f"Generated question {i + 1} about {params.topic or params.subject}?",
@@ -32,10 +35,30 @@ class FakeGenerator:
                 correct_option=i % 4,
                 explanation=f"Explanation {i + 1}",
                 topic=["Basics", "Advanced"][i % 2],
+                source_ref=refs[i % len(refs)] if refs else "",
             )
             for i in range(params.count)
         ]
         return GenerationResult(questions=questions, warnings=list(self.warnings), notes="Looks good.")
+
+
+class FakeEmbedder:
+    """Hashing bag-of-words embedder: texts sharing words get similar vectors."""
+
+    model = "fake-embedding"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        from app.services.sources.retrieval import tokenize
+
+        self.calls += 1
+        matrix = np.zeros((len(texts), 256), dtype=np.float32)
+        for row, text in enumerate(texts):
+            for token in tokenize(text):
+                matrix[row, hash(token) % 256] += 1.0
+        return normalise(matrix)
 
 
 class Clock:
@@ -68,6 +91,17 @@ def generator() -> FakeGenerator:
 
 
 @pytest.fixture
+def embedder() -> FakeEmbedder:
+    return FakeEmbedder()
+
+
+@pytest.fixture
+def embeddings_enabled() -> dict:
+    """Tests can set ["on"] = False to simulate a missing OpenAI key."""
+    return {"on": True}
+
+
+@pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     fake = Clock()
     monkeypatch.setattr(attempt_service, "utcnow", fake)
@@ -75,8 +109,19 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
 
 
 @pytest.fixture
-def client(settings: Settings, generator: FakeGenerator, clock: Clock) -> Iterator[TestClient]:
-    app = create_app(settings, generator=generator, frontend_dist=None)
+def client(
+    settings: Settings,
+    generator: FakeGenerator,
+    clock: Clock,
+    embedder: FakeEmbedder,
+    embeddings_enabled: dict,
+) -> Iterator[TestClient]:
+    app = create_app(
+        settings,
+        generator=generator,
+        embedder_factory=lambda: embedder if embeddings_enabled["on"] else None,
+        frontend_dist=None,
+    )
     with TestClient(app) as test_client:
         yield test_client
 

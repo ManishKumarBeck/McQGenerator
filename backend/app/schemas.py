@@ -29,6 +29,7 @@ class QuestionIn(BaseModel):
     correct_option: int = Field(ge=0)
     explanation: Annotated[str, StringConstraints(strip_whitespace=True, max_length=3000)] = ""
     topic: ShortText = ""
+    source_ref: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
 
     @field_validator("options")
     @classmethod
@@ -57,6 +58,7 @@ class QuestionOut(ORMModel):
     correct_option: int
     explanation: str
     topic: str
+    source_ref: str = ""
 
 
 # --------------------------------------------------------------------------- tests
@@ -162,6 +164,9 @@ class GenerateTestForm(BaseModel):
     marks_per_question: float = Field(default=1.0, gt=0, le=100)
     negative_marks: float = Field(default=0.0, ge=0, le=100)
     quality_review: bool = False
+    # Library (RAG) generation: which sources to draw from, and what to focus on.
+    source_ids: list[int] = Field(default_factory=list, max_length=20)
+    focus: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
 
     @model_validator(mode="after")
     def _check(self) -> "GenerateTestForm":
@@ -259,6 +264,7 @@ class ResultQuestion(BaseModel):
     marked_for_review: bool
     explanation: str
     topic: str
+    source_ref: str = ""
     time_spent_seconds: int
 
 
@@ -313,3 +319,44 @@ class HealthStatus(BaseModel):
     database: bool
     ai_configured: bool
     model: str
+
+
+# --------------------------------------------------------------------------- source library (RAG)
+
+SourceStatus = Literal["processing", "ready", "failed"]
+
+
+class SourceOut(BaseModel):
+    id: int
+    title: str
+    kind: Literal["file", "url"]
+    file_type: str
+    origin: str
+    status: SourceStatus
+    progress: int
+    error: str
+    notes: str
+    char_count: int
+    chunk_count: int
+    page_count: int | None
+    semantic_search: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceUrlCreate(BaseModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
+
+
+class SourceRename(BaseModel):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+
+
+class SourceSearchHit(BaseModel):
+    position: int
+    citation: str
+    text: str
+    score: float
+    keyword_score: float
+    semantic_score: float | None

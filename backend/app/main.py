@@ -15,9 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from .config import ROOT_DIR, Settings, get_settings
 from .database import Base, create_db_engine, create_session_factory
 from .errors import register_error_handlers
-from .routers import attempts, meta, tests
+from .migrations import upgrade
+from .routers import attempts, meta, sources, tests
 from .services.attempts import finalize_expired_attempts
 from .services.generation import OpenAIQuestionGenerator, QuestionGenerator
+from .services.sources.embeddings import default_embedder_factory
+from .services.sources.library import EmbedderFactory, mark_interrupted
 
 FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 
@@ -26,6 +29,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     generator: QuestionGenerator | None = None,
+    embedder_factory: EmbedderFactory | None = None,
     frontend_dist: Path | None = FRONTEND_DIST,
 ) -> FastAPI:
     settings = settings or get_settings()
@@ -40,7 +44,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         Base.metadata.create_all(engine)
+        upgrade(engine)
         with session_factory() as db:
+            mark_interrupted(db)
             closed = finalize_expired_attempts(db, settings)
             if closed:
                 logging.getLogger(__name__).info("Auto-submitted %d expired attempt(s)", closed)
@@ -57,6 +63,7 @@ def create_app(
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.generator = generator or OpenAIQuestionGenerator(settings)
+    app.state.embedder_factory = embedder_factory or default_embedder_factory(settings)
 
     app.add_middleware(
         CORSMiddleware,
@@ -68,6 +75,7 @@ def create_app(
     app.include_router(meta.router)
     app.include_router(tests.router)
     app.include_router(attempts.router)
+    app.include_router(sources.router)
 
     if settings.serve_frontend and frontend_dist and (frontend_dist / "index.html").is_file():
         _mount_frontend(app, frontend_dist)

@@ -18,9 +18,14 @@ from app.services.generation import (
 )
 
 
-def llm_q(text="What is 2 + 2?", options=("3", "4", "5", "6"), correct="B", topic="Arithmetic"):
+def llm_q(text="What is 2 + 2?", options=("3", "4", "5", "6"), correct="B", topic="Arithmetic", source=""):
     return LLMQuestion(
-        question=text, options=list(options), correct_option=correct, explanation="Because.", topic=topic
+        question=text,
+        options=list(options),
+        correct_option=correct,
+        explanation="Because.",
+        topic=topic,
+        source=source,
     )
 
 
