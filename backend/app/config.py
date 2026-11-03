@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     openai_temperature: float = Field(default=0.4, ge=0, le=2)
     openai_timeout_seconds: float = Field(default=90, gt=0)
     openai_max_retries: int = Field(default=2, ge=0, le=5)
+    openai_embedding_model: str = "text-embedding-3-small"
 
     database_url: str = f"sqlite:///{DEFAULT_DB_PATH.as_posix()}"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -36,6 +37,13 @@ class Settings(BaseSettings):
     max_upload_mb: float = Field(default=5, gt=0)
     max_source_chars: int = Field(default=40_000, ge=1_000)
     max_questions_per_generation: int = Field(default=30, ge=1, le=50)
+    # Source library (RAG)
+    max_library_upload_mb: float = Field(default=25, gt=0)
+    max_library_chars: int = Field(default=3_000_000, ge=10_000)
+    url_fetch_timeout_seconds: float = Field(default=20, gt=0)
+    # Only for local development: lets the library fetch links on private networks / localhost.
+    allow_private_urls: bool = False
+
     # Allowance for network latency when answers/submissions arrive right at the deadline.
     submission_grace_seconds: int = Field(default=10, ge=0, le=120)
 
@@ -56,6 +64,10 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return int(self.max_upload_mb * 1024 * 1024)
+
+    @property
+    def max_library_upload_bytes(self) -> int:
+        return int(self.max_library_upload_mb * 1024 * 1024)
 
 
 @lru_cache

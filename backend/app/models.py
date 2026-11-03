@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -67,6 +68,8 @@ class Question(Base):
     correct_option: Mapped[int] = mapped_column(Integer)
     explanation: Mapped[str] = mapped_column(Text, default="")
     topic: Mapped[str] = mapped_column(String(150), default="")
+    # Where the question came from, e.g. "Biology Textbook, p. 42" (library generation).
+    source_ref: Mapped[str] = mapped_column(String(300), default="")
 
     test: Mapped[Test] = relationship(back_populates="questions")
 
@@ -137,6 +140,7 @@ class AttemptAnswer(Base):
     correct_option: Mapped[int] = mapped_column(Integer)
     explanation: Mapped[str] = mapped_column(Text, default="")
     topic: Mapped[str] = mapped_column(String(150), default="")
+    source_ref: Mapped[str] = mapped_column(String(300), default="")
 
     selected_option: Mapped[int | None] = mapped_column(Integer, nullable=True)
     marked_for_review: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -146,3 +150,48 @@ class AttemptAnswer(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     attempt: Mapped[Attempt] = relationship(back_populates="answers")
+
+
+class Source(TimestampMixin, Base):
+    """A document or web page in the library, split into searchable chunks (RAG)."""
+
+    __tablename__ = "sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    title_locked: Mapped[bool] = mapped_column(Boolean, default=False)  # user-chosen title: keep on re-index
+    kind: Mapped[str] = mapped_column(String(10))  # "file" | "url"
+    file_type: Mapped[str] = mapped_column(String(10), default="")  # pdf, docx, txt, md, epub, html
+    origin: Mapped[str] = mapped_column(String(2000), default="")  # file name or URL
+    status: Mapped[str] = mapped_column(String(20), default="processing", index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    char_count: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    chunks: Mapped[list["SourceChunk"]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="SourceChunk.position",
+    )
+
+
+class SourceChunk(Base):
+    __tablename__ = "source_chunks"
+    __table_args__ = (UniqueConstraint("source_id", "position", name="uq_chunk_position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section: Mapped[str] = mapped_column(String(300), default="")
+    # L2-normalised float32 vector; NULL when indexed without embeddings (keyword search only).
+    embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
+    source: Mapped[Source] = relationship(back_populates="chunks")

@@ -21,7 +21,7 @@ class SourceText:
     warnings: list[str] = field(default_factory=list)
 
 
-def _decode_text(data: bytes) -> str:
+def decode_text(data: bytes) -> str:
     for encoding in ("utf-8-sig", "cp1252"):
         try:
             return data.decode(encoding)
@@ -63,7 +63,7 @@ def extract_text_from_upload(filename: str, data: bytes, *, max_bytes: int) -> s
     if len(data) > max_bytes:
         raise InvalidInputError(f"The file is too large. The limit is {max_bytes / (1024 * 1024):g} MB.")
 
-    text = _extract_pdf(data) if name.endswith(".pdf") else _decode_text(data)
+    text = _extract_pdf(data) if name.endswith(".pdf") else decode_text(data)
     text = normalize_text(text)
     if not text:
         if name.endswith(".pdf"):
