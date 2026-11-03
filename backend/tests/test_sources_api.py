@@ -366,3 +366,11 @@ def test_old_database_is_upgraded(settings, generator, tmp_path):
         assert test["questions"][0]["source_ref"] == ""
         attempt = client.post("/api/tests/1/attempts")
         assert attempt.status_code == 201
+
+
+def test_document_title_is_used_unless_user_named_it(client):
+    markdown = b"# Cell Biology Notes\n\n" + BIOLOGY.encode()
+    assert get(client, upload(client, "notes.md", markdown)["id"])["title"] == "Cell Biology Notes"
+    assert (
+        get(client, upload(client, "notes.md", markdown, title="My own name")["id"])["title"] == "My own name"
+    )

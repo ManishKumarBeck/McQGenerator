@@ -50,6 +50,7 @@ def create_file_source(
         raise InvalidInputError(f"The file is too large. The limit is {settings.max_library_upload_mb:g} MB.")
     source = Source(
         title=(title.strip() or title_from_filename(filename))[:300],
+        title_locked=bool(title.strip()),
         kind="file",
         file_type=file_type,
         origin=filename[:2000],
@@ -126,6 +127,16 @@ def to_schema(source: Source) -> schemas.SourceOut:
 
 
 # --------------------------------------------------------------------------- indexing
+
+
+def _good_title(title: str, fallback: str) -> bool:
+    """Use a document's own title unless it is missing or looks auto-generated."""
+    title = (title or "").strip()
+    if len(title) < 3 or title == fallback:
+        return False
+    lowered = title.lower()
+    junk = ("microsoft word", ".doc", ".pdf", "untitled", "document1")
+    return not any(marker in lowered for marker in junk)
 
 
 def _set(db: Session, source: Source, **values) -> None:
@@ -208,7 +219,7 @@ def process_source(
                 )
                 for i, c in enumerate(kept)
             )
-            if source.kind == "url" and not source.title_locked:
+            if not source.title_locked and _good_title(document.title, fallback):
                 source.title = document.title[:300]
             source.file_type = file_type
             source.char_count = total_chars
