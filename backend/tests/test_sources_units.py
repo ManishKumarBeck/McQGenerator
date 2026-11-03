@@ -409,8 +409,35 @@ def test_unresolvable_host(monkeypatch):
         raise socket.gaierror("nope")
 
     monkeypatch.setattr(fetch_module.socket, "getaddrinfo", fail)
+    for name in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.delenv(name, raising=False)
     with pytest.raises(InvalidInputError, match="Couldn't find the website"):
         fetch("https://no-such-host.example/", {})
+
+
+def test_unresolvable_host_behind_proxy_is_left_to_the_proxy(monkeypatch):
+    def fail(*args, **kwargs):
+        raise socket.gaierror("no local dns")
+
+    monkeypatch.setattr(fetch_module.socket, "getaddrinfo", fail)
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.corp:3128")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    routes = {
+        "https://site.example/a": httpx.Response(
+            200, content=HTML_PAGE, headers={"content-type": "text/html"}
+        )
+    }
+    assert fetch("https://site.example/a", routes).file_type == "html"
+    # Literal private addresses are still refused without any DNS lookup.
+    for url in (
+        "https://127.0.0.1/",
+        "https://[::1]/",
+        "https://intranet.local/",
+        "https://169.254.169.254/",
+    ):
+        with pytest.raises(InvalidInputError, match="private or local"):
+            fetch(url, {})
 
 
 def test_network_error(public_dns):

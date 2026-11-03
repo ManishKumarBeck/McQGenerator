@@ -7,6 +7,7 @@ non-public addresses are refused (unless ALLOW_PRIVATE_URLS is enabled for local
 
 import ipaddress
 import socket
+import urllib.request
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
@@ -48,10 +49,30 @@ def validate_url(url: str) -> str:
     return url
 
 
-def _check_host(hostname: str, port: int | None) -> None:
+def _is_private_literal(hostname: str) -> bool:
+    host = hostname.strip("[]").lower()
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+        return True
+    try:
+        return not ipaddress.ip_address(host).is_global
+    except ValueError:
+        return False
+
+
+def _uses_proxy(scheme: str, hostname: str) -> bool:
+    proxies = urllib.request.getproxies()
+    return bool(proxies.get(scheme) or proxies.get("all")) and not urllib.request.proxy_bypass(hostname)
+
+
+def _check_host(hostname: str, port: int | None, scheme: str) -> None:
+    if _is_private_literal(hostname):
+        raise InvalidInputError("Links to private or local network addresses are not allowed.")
     try:
         infos = socket.getaddrinfo(hostname, port or 443, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
+        # Behind an HTTP proxy the proxy resolves names, so local DNS may legitimately fail.
+        if _uses_proxy(scheme, hostname):
+            return
         raise InvalidInputError(f"Couldn't find the website “{hostname}”. Check the link.") from exc
     for info in infos:
         address = ipaddress.ip_address(info[4][0])
@@ -96,7 +117,7 @@ def fetch_document(
         for _hop in range(MAX_REDIRECTS + 1):
             parts = urlsplit(url)
             if not allow_private:
-                _check_host(parts.hostname or "", parts.port)
+                _check_host(parts.hostname or "", parts.port, parts.scheme)
             try:
                 with client.stream("GET", url) as response:
                     if response.is_redirect:
