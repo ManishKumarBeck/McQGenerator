@@ -32,14 +32,18 @@ export default defineConfig({
       cwd: path.resolve(import.meta.dirname, "../backend"),
       url: `http://127.0.0.1:${apiPort}/api/health`,
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: 120_000,
+      stdout: "pipe",
     },
     {
-      command: `npx vite --port ${webPort} --strictPort`,
+      // Bind explicitly to IPv4: "localhost" resolves to ::1 first on GitHub's Ubuntu runners,
+      // which made Vite listen on IPv6 only while Playwright waited on 127.0.0.1.
+      command: `npx vite --host 127.0.0.1 --port ${webPort} --strictPort`,
       url: `http://127.0.0.1:${webPort}`,
       env: { VITE_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}` },
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: 120_000,
+      stdout: "pipe",
     },
   ],
 });
